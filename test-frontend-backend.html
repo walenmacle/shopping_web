@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前后端连接测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        button {
+            background-color: #409EFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #337ab7;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .loading {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>前后端连接测试工具</h1>
+        
+        <!-- 后端服务状态检查 -->
+        <div class="test-section">
+            <h3>1. 后端服务状态检查</h3>
+            <button onclick="checkBackendStatus()">检查后端服务</button>
+            <div id="backend-status" class="result"></div>
+        </div>
+
+        <!-- 用户认证测试 -->
+        <div class="test-section">
+            <h3>2. 用户认证测试</h3>
+            <div>
+                <input type="text" id="username" placeholder="用户名" value="admin">
+                <input type="password" id="password" placeholder="密码" value="admin">
+                <button onclick="testLogin()">测试登录</button>
+                <button onclick="testRegister()">测试注册</button>
+            </div>
+            <div id="auth-result" class="result"></div>
+        </div>
+
+        <!-- 商品数据测试 -->
+        <div class="test-section">
+            <h3>3. 商品数据测试</h3>
+            <button onclick="testGetProducts()">获取商品列表</button>
+            <button onclick="testSearchProducts()">搜索商品</button>
+            <button onclick="testCreateProduct()">创建商品</button>
+            <div id="product-result" class="result"></div>
+        </div>
+
+        <!-- 订单数据测试 -->
+        <div class="test-section">
+            <h3>4. 订单数据测试</h3>
+            <button onclick="testGetOrders()">获取订单列表</button>
+            <button onclick="testCreateOrder()">创建订单</button>
+            <button onclick="testUpdateOrderStatus()">更新订单状态</button>
+            <div id="order-result" class="result"></div>
+        </div>
+
+        <!-- 数据持久化测试 -->
+        <div class="test-section">
+            <h3>5. 数据持久化测试</h3>
+            <button onclick="testDataPersistence()">测试数据保存</button>
+            <div id="persistence-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api';
+        let currentToken = null;
+        let currentUser = null;
+
+        // 显示结果
+        function showResult(elementId, message, type = 'success') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `result ${type}`;
+        }
+
+        // 显示加载状态
+        function showLoading(elementId, message = '正在处理...') {
+            showResult(elementId, message, 'loading');
+        }
+
+        // HTTP请求封装
+        async function apiRequest(url, options = {}) {
+            const headers = {
+                'Content-Type': 'application/json',
+                ...options.headers
+            };
+            
+            if (currentToken) {
+                headers.Authorization = `Bearer ${currentToken}`;
+            }
+
+            const response = await fetch(API_BASE + url, {
+                ...options,
+                headers
+            });
+
+            const data = await response.json();
+            return { response, data };
+        }
+
+        // 1. 检查后端服务状态
+        async function checkBackendStatus() {
+            showLoading('backend-status');
+            try {
+                const { response, data } = await apiRequest('/products');
+                if (response.ok) {
+                    showResult('backend-status', 
+                        `✓ 后端服务正常运行<br>状态码: ${response.status}<br>商品数量: ${data.length}`, 
+                        'success');
+                } else {
+                    showResult('backend-status', 
+                        `× 后端服务响应异常<br>状态码: ${response.status}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResult('backend-status', 
+                    `× 无法连接到后端服务<br>错误: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // 2. 测试用户登录
+        async function testLogin() {
+            showLoading('auth-result');
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const { response, data } = await apiRequest('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (data.success) {
+                    currentToken = data.token;
+                    currentUser = data.user;
+                    showResult('auth-result', 
+                        `✓ 登录成功<br>用户: ${data.user.name}<br>Token: ${data.token}`, 
+                        'success');
+                } else {
+                    showResult('auth-result', 
+                        `× 登录失败<br>错误: ${data.message}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResult('auth-result', 
+                    `× 登录请求失败<br>错误: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // 测试用户注册
+        async function testRegister() {
+            showLoading('auth-result');
+            const timestamp = Date.now();
+            const testUser = {
+                username: `testuser${timestamp}`,
+                password: 'test123456',
+                name: '测试用户',
+                email: `test${timestamp}@example.com`,
+                phone: '13900000000'
+            };
+
+            try {
+                const { response, data } = await apiRequest('/auth/register', {
+                    method: 'POST',
+                    body: JSON.stringify(testUser)
+                });
+
+                if (data.success) {
+                    showResult('auth-result', 
+                        `✓ 注册成功<br>用户: ${data.user.name}<br>ID: ${data.user.id}`, 
+                        'success');
+                } else {
+                    showResult('auth-result', 
+                        `× 注册失败<br>错误: ${data.message}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResult('auth-result', 
+                    `× 注册请求失败<br>错误: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // 3. 测试获取商品列表
+        async function testGetProducts() {
+            showLoading('product-result');
+            try {
+                const { response, data } = await apiRequest('/products');
+                if (response.ok) {
+                    showResult('product-result', 
+                        `✓ 商品列表获取成功<br>商品数量: ${data.length}<br>前3个商品: ${data.slice(0,3).map(p => p.name).join(', ')}`, 
+                        'success');
+                } else {
+                    showResult('product-result', 
+                        `× 获取商品列表失败<br>状态码: ${response.status}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResult('product-result', 
+                    `× 请求失败<br>错误: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // 测试搜索商品
+        async function testSearchProducts() {
+            showLoading('product-result');
+            try {
+                const { response, data } = await apiRequest('/products/search?name=手机');
+                if (response.ok) {
+                    showResult('product-result', 
+                        `✓ 商品搜索成功<br>搜索结果: ${data.length}个商品<br>商品名称: ${data.map(p => p.name).join(', ')}`, 
+                        'success');
+                } else {
+                    showResult('product-result', 
+                        `× 商品搜索失败<br>状态码: ${response.status}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResult('product-result', 
+                    `× 搜索请求失败<br>错误: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // 测试创建商品
+        async function testCreateProduct() {
+            if (!currentToken) {
+                showResult('product-result', '× 请先登录', 'error');
+                return;
+            }
+
+            showLoading('product-result');
+            const testProduct = {
+                name: `测试商品_${Date.now()}`,
+                description: '这是一个测试商品',
+                price: 99.99,
+                stock: 100,
+                category: '测试类别',
+                imageUrl: 'https://via.placeholder.com/300x300',
+                sellerId: 1 // 假设第一个商家
+            };
+
+            try {
+                const { response, data } = await apiRequest('/products', {
+                    method: 'POST',
+                    body: JSON.stringify(testProduct)
+                });
+
+                if (response.ok) {
+                    showResult('product-result', 
+                        `✓ 商品创建成功<br>商品ID: ${data.id}<br>商品名称: ${data.name}`, 
+                        'success');
+                } else {
+                    showResult('product-result', 
+                        `× 商品创建失败<br>状态码: ${response.status}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResult('product-result', 
+                    `× 创建请求失败<br>错误: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // 4. 测试获取订单列表
+        async function testGetOrders() {
+            if (!currentUser) {
+                showResult('order-result', '× 请先登录', 'error');
+                return;
+            }
+
+            showLoading('order-result');
+            try {
+                const { response, data } = await apiRequest(`/orders/customer/${currentUser.id}`);
+                if (response.ok) {
+                    showResult('order-result', 
+                        `✓ 订单列表获取成功<br>订单数量: ${data.length}<br>订单状态: ${data.map(o => o.status).join(', ')}`, 
+                        'success');
+                } else {
+                    showResult('order-result', 
+                        `× 获取订单列表失败<br>状态码: ${response.status}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResult('order-result', 
+                    `× 请求失败<br>错误: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // 测试创建订单
+        async function testCreateOrder() {
+            if (!currentUser) {
+                showResult('order-result', '× 请先登录', 'error');
+                return;
+            }
+
+            showLoading('order-result');
+            const testOrder = {
+                customerId: currentUser.id,
+                shippingAddress: '北京市朝阳区测试街道123号',
+                receiverName: '测试收货人',
+                receiverPhone: '13900000000',
+                paymentMethod: 'ALIPAY',
+                orderItems: [
+                    {
+                        productId: 1,
+                        quantity: 2,
+                        unitPrice: 99.99
+                    }
+                ]
+            };
+
+            try {
+                const { response, data } = await apiRequest('/orders', {
+                    method: 'POST',
+                    body: JSON.stringify(testOrder)
+                });
+
+                if (response.ok) {
+                    showResult('order-result', 
+                        `✓ 订单创建成功<br>订单号: ${data.orderNumber}<br>订单总额: ¥${data.totalAmount}`, 
+                        'success');
+                } else {
+                    showResult('order-result', 
+                        `× 订单创建失败<br>状态码: ${response.status}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResult('order-result', 
+                    `× 创建请求失败<br>错误: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // 测试更新订单状态
+        async function testUpdateOrderStatus() {
+            showLoading('order-result');
+            try {
+                // 先获取订单列表
+                const { response: ordersResponse, data: orders } = await apiRequest('/orders');
+                if (orders.length === 0) {
+                    showResult('order-result', '× 没有订单可以更新', 'error');
+                    return;
+                }
+
+                const orderId = orders[0].id;
+                const { response, data } = await apiRequest(`/orders/${orderId}/status?status=SHIPPED`, {
+                    method: 'PATCH'
+                });
+
+                if (response.ok) {
+                    showResult('order-result', 
+                        `✓ 订单状态更新成功<br>订单ID: ${data.id}<br>新状态: ${data.status}`, 
+                        'success');
+                } else {
+                    showResult('order-result', 
+                        `× 订单状态更新失败<br>状态码: ${response.status}`, 
+                        'error');
+                }
+            } catch (error) {
+                showResult('order-result', 
+                    `× 更新请求失败<br>错误: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // 5. 测试数据持久化
+        async function testDataPersistence() {
+            showLoading('persistence-result');
+            let results = [];
+
+            try {
+                // 测试1: 创建数据并验证保存
+                const timestamp = Date.now();
+                const testProduct = {
+                    name: `持久化测试商品_${timestamp}`,
+                    description: '测试数据持久化',
+                    price: 123.45,
+                    stock: 50,
+                    category: '测试',
+                    sellerId: 1
+                };
+
+                const { response: createResponse, data: createdProduct } = await apiRequest('/products', {
+                    method: 'POST',
+                    body: JSON.stringify(testProduct)
+                });
+
+                if (createResponse.ok) {
+                    results.push('✓ 商品创建成功');
+
+                    // 测试2: 重新获取验证数据是否保存
+                    const { response: getResponse, data: retrievedProduct } = await apiRequest(`/products/${createdProduct.id}`);
+                    
+                    if (getResponse.ok && retrievedProduct.name === testProduct.name) {
+                        results.push('✓ 数据持久化验证成功');
+                        
+                        // 测试3: 更新数据
+                        const updatedProduct = { ...retrievedProduct, price: 999.99 };
+                        const { response: updateResponse, data: finalProduct } = await apiRequest(`/products/${createdProduct.id}`, {
+                            method: 'PUT',
+                            body: JSON.stringify(updatedProduct)
+                        });
+
+                        if (updateResponse.ok && finalProduct.price === 999.99) {
+                            results.push('✓ 数据更新持久化成功');
+                        } else {
+                            results.push('× 数据更新持久化失败');
+                        }
+                    } else {
+                        results.push('× 数据持久化验证失败');
+                    }
+                } else {
+                    results.push('× 商品创建失败');
+                }
+
+                showResult('persistence-result', results.join('<br>'), 
+                    results.every(r => r.startsWith('✓')) ? 'success' : 'error');
+
+            } catch (error) {
+                showResult('persistence-result', 
+                    `× 持久化测试失败<br>错误: ${error.message}`, 
+                    'error');
+            }
+        }
+
+        // 页面加载时自动检查后端状态
+        window.onload = function() {
+            checkBackendStatus();
+        };
+    </script>
+</body>
+</html> 
